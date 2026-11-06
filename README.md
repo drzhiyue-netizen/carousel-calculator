@@ -8,6 +8,24 @@
 
 ![桌面版](screenshots/desktop.png)
 
+## 两种用法
+
+### 一、浏览器版
+
+双击 `index.html`。
+
+### 二、桌面常驻版（Windows）
+
+双击 `desktop/追平.vbs`，右下角出现一个置顶小窗，不占任务栏、不弹控制台。
+
+- **左键拖动**移动位置
+- **右键**：开始上班 / 下班、设置、始终置顶、退出
+- 数据存在同目录 `zhuiping.json`，可随身带走
+
+依赖：Windows 自带的 PowerShell 5.1 + WPF，**不用装任何东西**。
+
+> 文件是 UTF-8 with BOM 保存的。自己改的话请保持 BOM，否则 PowerShell 5.1 会把中文读成乱码。
+
 ## 使用
 
 双击 `index.html`，用浏览器打开即可。不需要安装、不需要联网、没有后端。

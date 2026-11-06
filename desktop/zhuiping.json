@@ -1,0 +1,14 @@
+﻿{
+    "cfg":  {
+                "monthlySalary":  20000,
+                "workDays":  21.75,
+                "hoursPerDay":  8,
+                "tokenPrice":  1
+            },
+    "day":  "2026-11-06",
+    "workedSec":  0,
+    "startedAt":  0,
+    "month":  "2026-11",
+    "tokens":  0,
+    "tokenAt":  1793954416157
+}
