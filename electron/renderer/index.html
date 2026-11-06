@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>旋转木马计算器</title>
+<!-- impeccable-disable pulsing-dot, dark-glow: livedot 跟的是每秒实时更新的 token 消耗（真活数据）；页面底色是 #E9EDF2 浅色，主按钮阴影带 4px/5px 偏移、不是零偏移光晕，impeccable 把上方 odometer 库的黑底样式当成了页面底色 -->
+<style>
+  :root{
+    --bg:#E0E5EC;            /* 拟态底：够灰，白高光才显形 */
+    --card:#FFFFFF;          /* 卡片 */
+    --line:#E2E7ED;          /* 极淡描边 */
+    --hi:#FFFFFF;
+    --lo:#A3B1C6;
+    --ink:#171C23;           /* 主文字 */
+    --mute:#5C6673;          /* 次文字 */
+    --faint:#6E7885;         /* 辅助文字 */
+    --gain:#0E7457;          /* 赚：深绿 */
+    --burn:#C0561E;          /* 花：橘 */
+    --loss:#9E3B2E;          /* 净亏：红 */
+    --hot:#CE460F;           /* 品牌橙，只留给按钮和状态 */
+    --hot-d:#C4440F;
+    --raised:-4px -4px 10px var(--hi), 4px 4px 10px var(--lo);
+    --pressed:inset 3px 3px 7px var(--lo), inset -3px -3px 7px var(--hi);
+    --radius:16px;
+    --gut:12px;
+    --pad:13px;
+    --font-ui:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    --font-num:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;user-select:none}
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;
+    font-family:var(--font-ui);color:var(--ink);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  .card{position:relative;height:100%;padding:12px;display:flex;flex-direction:column;gap:8px;
+    background:var(--bg);border-radius:var(--radius);
+    animation:enter .22s cubic-bezier(.2,.8,.2,1)}
+  @keyframes enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .bar{display:flex;align-items:center;gap:8px;-webkit-app-region:drag;height:20px;flex:0 0 auto;
+    padding-left:var(--pad);padding-right:2px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--hot);
+    box-shadow:0 0 0 3px rgba(206,70,15,.13);flex:0 0 auto}
+  .dot.off{background:#B3BBC5;box-shadow:none}
+  .title{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--mute)}
+  .spacer{flex:1}
+  .time{font-size:11px;color:var(--faint);font-family:var(--font-num);
+    font-variant-numeric:tabular-nums;margin-right:4px}
+
+  .xbtn{-webkit-app-region:no-drag;width:22px;height:18px;border:0;border-radius:7px;background:var(--bg);
+    color:var(--faint);font-size:13px;line-height:1;cursor:pointer;
+    box-shadow:-2px -2px 4px var(--hi), 2px 2px 4px var(--lo);
+    transition:box-shadow .18s ease,color .16s ease,transform .1s ease}
+  .xbtn:hover{color:var(--hot);box-shadow:-3px -3px 6px var(--hi), 3px 3px 6px var(--lo)}
+  .xbtn:focus-visible{outline:2px solid var(--hot);outline-offset:2px;color:var(--hot)}
+  .xbtn:active{transform:scale(.96);box-shadow:inset 2px 2px 4px var(--lo), inset -2px -2px 4px var(--hi)}
+
+  /* 新拟态：同色底 + 左上白光 / 右下暗影 */
+  .well{min-height:0;overflow:hidden;background:var(--bg);border-radius:14px;
+    padding:12px;
+    box-shadow:-6px -6px 13px var(--hi), 6px 6px 13px var(--lo);
+    display:flex;flex-direction:column;justify-content:center}
+  .row{display:flex;gap:8px;flex:0 0 auto;align-items:stretch}
+  .row .well{flex:1 1 0;min-width:0;justify-content:flex-start}
+  .well.summary{flex:1 1 auto;justify-content:center;padding:12px}
+  .net{font-family:var(--font-num);font-variant-numeric:tabular-nums;
+    font-size:29px;font-weight:700;line-height:1.12;letter-spacing:-.02em;
+    color:var(--gain);margin-top:4px;white-space:nowrap;overflow:hidden}
+  .net.loss{color:var(--loss)}
+  .well-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+  .wl{font-size:11px;font-weight:600;color:var(--mute);letter-spacing:.02em}
+  .tag{width:19px;height:19px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:600;line-height:1;flex:0 0 auto}
+  .tag.up{color:#0B6B4F;background:#DFF3EA}
+  .tag.dn{color:#8F3227;background:#FBE7E3}
+  .money{display:flex;align-items:baseline;gap:2px;-webkit-app-region:no-drag;min-width:0}
+  .cur{font-family:var(--font-num);font-size:12px;font-weight:600;color:var(--gain);opacity:.85;flex:0 0 auto}
+  .cur.burn-cur{color:var(--burn)}
+  .odo{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;
+    font-family:var(--font-num);font-variant-numeric:tabular-nums;
+    font-size:21px;font-weight:700;line-height:1.1;letter-spacing:-.02em;color:var(--gain)}
+
+  .footrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    margin-top:12px;font-size:10.5px;color:var(--faint);font-family:var(--font-ui);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+  .footrow .r{color:var(--gain);font-weight:600}
+  #sub{overflow:hidden;text-overflow:ellipsis}
+  .sub2{font-size:10px;color:var(--faint);font-family:var(--font-ui);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px;
+    font-variant-numeric:tabular-nums}
+
+  .burnlabel{font-size:11px;letter-spacing:.02em;color:var(--mute);font-weight:600;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .burn{font-family:var(--font-num);font-size:21px;font-weight:700;line-height:1.1;
+    letter-spacing:-.02em;color:var(--burn);font-variant-numeric:tabular-nums;white-space:nowrap;
+    max-width:100%;overflow:hidden}
+  .burnsmall{font-size:10px;color:var(--faint);font-family:var(--font-ui);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px;
+    font-variant-numeric:tabular-nums}
+  .livedot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--burn);
+    margin-left:5px;vertical-align:middle;animation:blink 1.6s steps(1,end) infinite}
+  @keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.15}}
+  @media (prefers-reduced-motion: reduce){
+    .card{animation:none}
+    .livedot{animation:none;opacity:1}
+  }
+
+  .verdict{font-size:11px;color:var(--mute);line-height:1.35;margin-top:8px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-variant-numeric:tabular-nums}
+  .verdict b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+  .verdict .c{color:var(--gain)}
+  .verdict .l{color:var(--loss)}
+
+  .btn{
+    flex:1;height:32px;border:0;border-radius:11px;
+    background:var(--bg);color:var(--ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+    letter-spacing:.02em;
+    box-shadow:-3px -3px 7px var(--hi), 3px 3px 7px var(--lo);
+    transition:box-shadow .18s cubic-bezier(.2,.8,.2,1),transform .1s ease,color .16s ease,background .16s ease;
+  }
+  .btn:hover{box-shadow:-4px -4px 9px var(--hi), 4px 4px 9px var(--lo)}
+  .btn:active{box-shadow:var(--pressed);transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--hot);outline-offset:3px}
+  .btn.ghost{flex:0 0 64px;color:var(--mute)}
+  .btn.ghost:hover{color:var(--ink)}
+  .btn.primary{color:#fff;background:var(--hot-d);
+    box-shadow:-3px -3px 8px rgba(255,255,255,.55), 4px 5px 11px rgba(160,55,10,.28),
+      inset 0 1px 0 rgba(255,255,255,.16)}
+  .btn.primary:hover{background:#C2420B;
+    box-shadow:-4px -4px 9px rgba(255,255,255,.6), 5px 7px 14px rgba(160,55,10,.32),
+      inset 0 1px 0 rgba(255,255,255,.2)}
+  .btn.primary:active{background:var(--hot-d);
+    box-shadow:inset 2px 2px 6px rgba(110,35,5,.42), inset -2px -2px 5px rgba(255,255,255,.16);
+    transform:translateY(1px)}
+
+  .settings{position:absolute;inset:8px;background:var(--bg);border-radius:14px;
+    padding:12px;display:none;flex-direction:column;gap:8px;z-index:3;
+    box-shadow:var(--raised), 0 20px 40px rgba(40,50,60,.20);-webkit-app-region:no-drag}
+  .settings.on{display:flex}
+  .settings h3{margin:0 0 1px;font-size:12px;letter-spacing:.1em;color:var(--mute);font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .field label{display:block;font-size:11px;color:var(--faint);margin-bottom:2px;font-weight:600}
+  .field input{width:100%;background:var(--bg);border:0;border-radius:8px;
+    color:var(--ink);padding:3px 7px;font:inherit;font-size:11px;font-family:ui-monospace,Consolas,monospace;
+    box-shadow:var(--pressed)}
+  .field input:focus{outline:none;box-shadow:var(--pressed), 0 0 0 2px rgba(206,70,15,.35)}
+  .settings .row{display:flex;gap:8px;margin-top:auto}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="bar">
+    <i class="dot off" id="dot"></i>
+    <span class="title">旋转木马计算器</span>
+    <span class="spacer"></span>
+    <span class="time" id="clock">--:--</span>
+    <button class="xbtn" id="cfgBtn" title="设置">⚙</button>
+    <button class="xbtn" id="close" title="关闭">×</button>
+  </div>
+
+  <div class="row">
+    <div class="well">
+      <div class="well-head">
+        <span class="wl">今日已赚</span>
+        <span class="tag up">↗</span>
+      </div>
+      <div class="money">
+        <span class="cur">¥</span>
+        <span class="odo" id="money">0</span>
+      </div>
+      <div class="sub2" id="sub2">—</div>
+    </div>
+
+    <div class="well">
+      <div class="well-head">
+        <span class="wl">今日已花<span class="livedot" id="livedot" style="display:none"></span></span>
+        <span class="tag dn">↓</span>
+      </div>
+      <div class="money">
+        <span class="cur burn-cur">¥</span>
+        <span class="burn" id="burn">—</span>
+      </div>
+      <div class="burnsmall" id="burnsub">未填写</div>
+    </div>
+  </div>
+
+  <div class="well summary">
+    <div class="well-head">
+      <span class="wl">今日净值</span>
+      <span class="tag up" id="netTag">↗</span>
+    </div>
+    <div class="net" id="net">¥0.00</div>
+    <div class="verdict" id="verdict">—</div>
+    <div class="footrow">
+      <span id="sub">—</span>
+      <span class="r" id="month">—</span>
+    </div>
+  </div>
+
+
+
+  <div class="settings" id="settings">
+    <h3>设置</h3>
+    <div class="grid">
+      <div class="field"><label>月薪（元）</label><input id="fSalary" type="number" step="500"></div>
+      <div class="field"><label>每周休息（天）</label><input id="fRest" type="number" min="0" max="2" step="1"></div>
+      <div class="field"><label>上班时间</label><input id="fStart" type="time"></div>
+      <div class="field"><label>下班时间</label><input id="fEnd" type="time"></div>
+      <div class="field"><label>午休（分钟）</label><input id="fLunch" type="number" min="0" step="15"></div>
+      <div class="field"><label>token 单价 /百万</label><input id="fPrice" type="number" min="0" step="0.1"></div>
+      <div class="field" style="grid-column:1/-1"><label>本月 token 总额</label><input id="fTokens" type="number" min="0" step="1000"></div>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="cfgCancel">取消</button>
+      <button class="btn primary" id="cfgSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// 历史存储键，改名后保留，换掉会丢用户已填的配置
+const KEY = 'zhuiping-desktop-v2';
+const pad = (n) => String(n).padStart(2, '0');
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const DEFAULTS = { monthlySalary: 20000, restDays: 2, startTime: '09:00', endTime: '18:00', lunchMin: 60, tokenPrice: 1 };
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY)) || {};
+    return {
+      cfg: { ...DEFAULTS, ...(s.cfg || {}) },
+      day: s.day || dayKey(),
+      month: s.month || dayKey().slice(0, 7),
+      tokens: Number(s.tokens) || 0,
+      tokenAt: Number(s.tokenAt) || Date.now(),
+    };
+  } catch { return { cfg: { ...DEFAULTS }, day: dayKey(), month: dayKey().slice(0, 7), tokens: 0, tokenAt: Date.now() }; }
+}
+let S = load();
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+// 常驻窗口必须运行时检测跨天/跨月，页面加载只执行一次不够
+function rollover() {
+  const dk = dayKey();
+  if (S.day !== dk) { S.day = dk; save(); }
+  const mk = dk.slice(0, 7);
+  if (S.month !== mk) { S.month = mk; S.tokens = 0; S.tokenAt = Date.now(); save(); }
+}
+
+const dailyHours = () => {
+  const [h1, m1] = S.cfg.startTime.split(':').map(Number);
+  const [h2, m2] = S.cfg.endTime.split(':').map(Number);
+  let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (mins <= 0) mins += 1440;
+  return Math.max(0.5, (mins - Math.max(0, S.cfg.lunchMin)) / 60);
+};
+// 只支持 0/1/2 天休息，和 isRestDay 的判定保持一致，否则分母和计时会对不上
+const workDays = () => ((7 - Math.min(2, Math.max(0, S.cfg.restDays))) / 7) * 30.4375;
+const salaryPerSec = () => S.cfg.monthlySalary / (workDays() * dailyHours() * 3600);
+
+function isRestDay(d = new Date()) {
+  const r = Math.min(2, Math.max(0, S.cfg.restDays));
+  if (r >= 2) return d.getDay() === 0 || d.getDay() === 6;
+  if (r === 1) return d.getDay() === 0;
+  return false;
+}
+
+function autoElapsed(now = new Date()) {
+  if (isRestDay(now)) return 0;
+  const [h1, m1] = S.cfg.startTime.split(':').map(Number);
+  const [h2, m2] = S.cfg.endTime.split(':').map(Number);
+  const start = h1 * 3600 + m1 * 60;
+  let end = h2 * 3600 + m2 * 60;
+  if (end <= start) end += 86400;
+  let t = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
+  if (end > 86400 && t < start) t += 86400;
+  if (t <= start) return 0;
+  let worked = Math.min(t, end) - start;
+  const lunch = Math.max(0, S.cfg.lunchMin) * 60;
+  if (t > start + 3600) worked -= Math.min(lunch, t - start - 3600);
+  return Math.max(0, worked);
+}
+
+function elapsed() {
+  return autoElapsed();
+}
+
+function workState(now = new Date()) {
+  if (isRestDay(now)) return 'rest';
+  const [h1, m1] = S.cfg.startTime.split(':').map(Number);
+  const [h2, m2] = S.cfg.endTime.split(':').map(Number);
+  const start = h1 * 3600 + m1 * 60;
+  let end = h2 * 3600 + m2 * 60;
+  if (end <= start) end += 86400;
+  const t = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  if (t < start) return 'before';
+  if (t >= end) return 'after';
+  return 'in';
+}
+
+function tokenStats() {
+  if (!S.tokens) return null;
+  const at = new Date(S.tokenAt);
+  const monthStart = new Date(at.getFullYear(), at.getMonth(), 1).getTime();
+  const days = (S.tokenAt - monthStart) / 86400000;
+  if (!(days >= 1)) return null;
+  const perDay = S.tokens / days;
+  const perSec = perDay / 86400;
+  return { perDay, perSec, yuanPerSec: (perSec * S.cfg.tokenPrice) / 1e6 };
+}
+
+
+// 只在值真的变了才写 DOM，避免每帧重排
+let lastVerdict = null;
+function setText(id, text) {
+  const el = $(id);
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
+const fmt = (v, d = 2) => v.toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function hms(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  return h > 0 ? `${h}小时${m}分${s}秒` : `${m}分${s}秒`;
+}
+
+// 本月已赚 = 已过工作日 × 日薪 + 今天已赚
+function monthEarned(now, todayEarned) {
+  const y = now.getFullYear(), m = now.getMonth();
+  let wd = 0;
+  for (let d = 1; d < now.getDate(); d++) {
+    if (!isRestDay(new Date(y, m, d))) wd++;
+  }
+  return wd * (S.cfg.monthlySalary / workDays()) + todayEarned;
+}
+
+function render() {
+  const now = new Date();
+  const secs = elapsed();
+  const earned = secs * salaryPerSec();
+  const nowMs = now.getTime();
+  setText('money', earned.toFixed(4));
+
+  const ws = workState(now);
+  const stateText = { rest: '今天休息', before: '未到上班时间', in: '上班中', after: '已下班' }[ws];
+  const dh = dailyHours();
+  const done = secs / 3600;
+  setText('sub', ws === 'in' ? `已上 ${hms(secs)}`
+    : ws === 'after' ? `已下班 · 共 ${hms(secs)}`
+    : ws === 'rest' ? '今天休息'
+    : '未到上班时间');
+  setText('sub2', ws === 'rest' ? '休息日不计时' : `时薪 ¥${fmt(salaryPerSec() * 3600)}`);
+  setText('month', `本月已赚 ¥${fmt(monthEarned(now, earned))}`);
+  $('dot').classList.toggle('off', ws !== 'in');
+  setText('clock', `${pad(now.getHours())}:${pad(now.getMinutes())}`);
+
+  const t = tokenStats();
+  if (!t) {
+    setText('burn', '—');
+    setText('burnsub', S.tokens ? '本月数据不足一天' : '未填写本月总额（点设置）');
+    if ($('livedot').style.display !== 'none') $('livedot').style.display = 'none';
+    setText('verdict', '填了 token 总额才能算净值');
+    setText('net', '¥0.00');
+    $('net').classList.remove('loss');
+    return;
+  }
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const burnToday = (t.yuanPerSec * (nowMs - midnight)) / 1000;
+  setText('burn', burnToday.toFixed(4));
+  setText('burnsub', `日均 ${(t.perDay / 1e8).toFixed(1)} 亿 token`);
+  if ($('livedot').style.display !== 'inline-block') $('livedot').style.display = 'inline-block';
+
+  const net = earned - burnToday;
+  const isLoss = net < 0;
+  setText('net', '¥' + Math.abs(net).toFixed(2));
+  $('net').classList.toggle('loss', isLoss);
+  $('netTag').textContent = isLoss ? '↘' : '↗';
+  $('netTag').className = 'tag ' + (isLoss ? 'dn' : 'up');
+
+  let verdict;
+  if (earned <= 0) verdict = '今天还没开始赚';
+  else if (burnToday <= 0) verdict = '今天还没烧钱';
+  else {
+    const mult = earned / burnToday;
+    verdict = mult >= 1
+      ? `赚的是烧的 <b class="c">${mult >= 100 ? Math.round(mult) : mult.toFixed(1)} 倍</b>`
+      : `烧的是赚的 <b class="l">${(1 / mult).toFixed(1)} 倍</b>`;
+  }
+  if (lastVerdict !== verdict) { lastVerdict = verdict; $('verdict').innerHTML = verdict; }
+}
+
+$('close').onclick = () => { save(); window.carousel.close(); };
+
+$('cfgBtn').onclick = () => {
+  $('fSalary').value = S.cfg.monthlySalary;
+  $('fRest').value = S.cfg.restDays;
+  $('fStart').value = S.cfg.startTime;
+  $('fEnd').value = S.cfg.endTime;
+  $('fLunch').value = S.cfg.lunchMin;
+  $('fPrice').value = S.cfg.tokenPrice;
+  $('fTokens').value = S.tokens || '';
+  $('settings').classList.add('on');
+};
+$('cfgCancel').onclick = () => $('settings').classList.remove('on');
+$('cfgSave').onclick = () => {
+  // 空输入框不能当成 0（用户清空重填时点保存会把月薪清零）
+  const n = (v, f, min = 0) => {
+    if (String(v).trim() === '') return f;
+    const x = Number(v);
+    return Number.isFinite(x) ? Math.max(min, x) : f;
+  };
+  const before = S.tokens;
+  S.cfg.monthlySalary = n($('fSalary').value, S.cfg.monthlySalary);
+  S.cfg.restDays = Math.min(2, Math.round(n($('fRest').value, S.cfg.restDays)));
+  S.cfg.startTime = /^\d\d:\d\d$/.test($('fStart').value) ? $('fStart').value : S.cfg.startTime;
+  S.cfg.endTime = /^\d\d:\d\d$/.test($('fEnd').value) ? $('fEnd').value : S.cfg.endTime;
+  S.cfg.lunchMin = n($('fLunch').value, S.cfg.lunchMin);
+  S.cfg.tokenPrice = n($('fPrice').value, S.cfg.tokenPrice);
+  const tok = n($('fTokens').value, S.tokens);
+  if (tok !== before) { S.tokens = tok; S.tokenAt = Date.now(); }
+  save(); render();
+  $('settings').classList.remove('on');
+};
+
+function loop() {
+  try { rollover(); render(); } catch (e) { console.error(e); }
+  requestAnimationFrame(loop);   // 先排下一帧，render 抛错也不会让窗口冻死
+}
+rollover();
+loop();
+setInterval(save, 5000);
+addEventListener('beforeunload', save);
+</script>
+</body>
+</html>
